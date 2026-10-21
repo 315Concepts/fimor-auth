@@ -68,7 +68,7 @@ All commands run from the repository root.
 ## Architecture
 
 <p align="center">
-  <img src="docs/fimor-architecture.png" alt="A high level architecture of an agentic AI social media campaign pipeline" style="max-height: 550">
+  <img src="docs/fimor-architecture.png" alt="A high level architecture of the FiMOr project" style="max-height: 550">
 </p>
 
 **FiMOr's edge is built on [_TIBIA_](https://github.com/315Concepts/TIBIA-router).** The `net` module is _TIBIA_'s _Traefik_ conventions - entrypoints, staging and production **ACME** resolvers, label-driven routing, and the firewall model - applied to an _Ory_ stack.
