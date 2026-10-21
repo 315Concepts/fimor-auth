@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="jnULTj1B18pBc0gv_ioZ">
-    <mxGraphModel dx="2247" dy="1459" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1664" dy="899" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -210,7 +210,7 @@
         <mxCell id="GTvySo1-5sQMN_tlDrE2-18" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=16;fontStyle=1" value="&lt;div&gt;debug&lt;/div&gt;" vertex="1">
           <mxGeometry height="30" width="60" x="1165" y="170" as="geometry" />
         </mxCell>
-        <mxCell id="GTvySo1-5sQMN_tlDrE2-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=24;fontStyle=1" value="FORY&lt;br&gt;Architecture" vertex="1">
+        <mxCell id="GTvySo1-5sQMN_tlDrE2-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=24;fontStyle=1" value="FiMOr&lt;br&gt;Architecture" vertex="1">
           <mxGeometry height="80" width="150" x="110" y="670" as="geometry" />
         </mxCell>
         <mxCell id="GTvySo1-5sQMN_tlDrE2-21" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;strokeWidth=2;" value="" vertex="1">

@@ -8,7 +8,9 @@ How _FiMOr_ is put together: the modules, the config rendering that ties them to
 - [Startup Order](#startup-order) - why `./fimor up` starts things the way it does
 - [Built on TIBIA](#built-on-tibia) - what the `net` module shares with TIBIA, and what FiMOr changes
 
-![Stack Architecture](./fimor-architecture.png)
+<p align="center">
+  <img src="fimor-architecture.png" alt="A high level architecture of an agentic AI social media campaign pipeline" style="max-height: 550">
+</p>
 
 Everything joins one external _Docker_ network, `ory_backend`, created by `./fimor up` and removed by `./fimor down`. _Traefik_ is the only container with published ports; it discovers every other service through `traefik.*` labels and routes by hostname or path.
 
