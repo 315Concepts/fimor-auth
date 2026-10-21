@@ -1,0 +1,26 @@
+serve:
+  cookies:
+    same_site_mode: Lax
+
+urls:
+  self:
+    issuer: https://${SERVICE_DOMAIN}${HYDRA_PUBLIC_PATH}
+  consent: https://${SERVICE_DOMAIN}/consent
+  login: https://${SERVICE_DOMAIN}/login
+  logout: https://${SERVICE_DOMAIN}/logout
+  error: https://${SERVICE_DOMAIN}/error
+  device:
+    verification: https://${SERVICE_DOMAIN}/device/verify
+    success: https://${SERVICE_DOMAIN}/device/success
+
+secrets:
+  system:
+    - ${HYDRA_SYSTEM_SECRET}
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+
+strategies:
+  access_token: jwt

@@ -1,0 +1,7 @@
+[
+  {
+    "op": "replace",
+    "path": "/post_logout_redirect_uris",
+    "value": ["<SETME-1>", "<SETME-2>"]
+  }
+]

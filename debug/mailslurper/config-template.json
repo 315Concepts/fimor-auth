@@ -1,0 +1,18 @@
+{
+  "wwwAddress": "0.0.0.0",
+  "wwwPort": 4436,
+  "wwwPublicUrl": "https://{WWW_PUBLIC_URL}:{PRIVATE_HTTPS_PORT}/",
+  "serviceAddress": "0.0.0.0",
+  "servicePort": 4437,
+  "servicePublicUrl": "https://{SERVICE_PUBLIC_URL}:{PRIVATE_HTTPS_PORT}/",
+  "smtpAddress": "0.0.0.0",
+  "smtpPort": 1025,
+  "dbEngine": "SQLite",
+  "dbHost": "",
+  "dbPort": 0,
+  "dbDatabase": "/app/mailslurper.db",
+  "dbUserName": "",
+  "dbPassword": "",
+  "maxWorkers": 1000,
+  "autoStartBrowser": false
+}

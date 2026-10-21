@@ -1,0 +1,106 @@
+dsn: ${DSN}
+
+session:
+  cookie:
+    path: /
+    domain: .${SERVICE_DOMAIN}
+    same_site: Lax
+cookies:
+  path: /
+  domain: .${SERVICE_DOMAIN}
+  same_site: Lax
+
+serve:
+  public:
+    base_url: https://${SERVICE_DOMAIN}${KRATOS_PUBLIC_PATH}
+    cors:
+      enabled: true
+  admin:
+    base_url: https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${KRATOS_ADMIN_PATH}
+
+oauth2_provider:
+  url: https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${HYDRA_ADMIN_PATH}
+
+selfservice:
+  default_browser_return_url: https://${SERVICE_DOMAIN}/welcome
+  allowed_return_urls:
+    - https://${SERVICE_DOMAIN}
+
+  methods:
+    password:
+      enabled: true
+    code:
+      enabled: true
+      
+  flows:
+    error:
+      ui_url: https://${SERVICE_DOMAIN}/error
+
+    settings:
+      ui_url: https://${SERVICE_DOMAIN}/settings
+      privileged_session_max_age: 15m
+      required_aal: highest_available
+
+    recovery:
+      enabled: true
+      ui_url: https://${SERVICE_DOMAIN}/recovery
+      use: code
+
+    verification:
+      enabled: true
+      ui_url: https://${SERVICE_DOMAIN}/verification
+      use: code
+      after:
+        default_browser_return_url: https://${SERVICE_DOMAIN}/welcome
+
+    logout:
+      after:
+        default_browser_return_url: https://${SERVICE_DOMAIN}/login
+
+    login:
+      ui_url: https://${SERVICE_DOMAIN}/login
+      lifespan: 10m
+
+    registration:
+      lifespan: 10m
+      ui_url: https://${SERVICE_DOMAIN}/registration
+      after:
+        password:
+          hooks:
+            - hook: session
+            - hook: show_verification_ui
+
+log:
+  level: info
+  format: text
+
+secrets:
+  cookie:
+    - ${KRATOS_COOKIE_SECRET}
+  cipher:
+    - ${KRATOS_CIPHER_SECRET}
+
+ciphers:
+  algorithm: xchacha20-poly1305
+
+hashers:
+  algorithm: argon2
+  argon2:
+    parallelism: 2
+    memory: 16MB
+    iterations: 4
+    salt_length: 16
+    key_length: 32
+
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: file:///etc/config/kratos/identity.schema.json
+
+courier:
+  smtp:
+    connection_uri: ${ORY_SMTP_CONNECTION_URI}
+
+feature_flags:
+  use_continue_with_transitions: true

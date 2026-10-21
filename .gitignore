@@ -1,0 +1,15 @@
+# Don't commit SSL certificate stores
+net/acme
+# Don't commit the Postgres database
+pg/data
+# Don't commit the Postgres init files
+pg/init/*.sql
+# Don't commit executed config templates
+kratos.yml
+hydra.yml
+# Don't commit the mailslurper db
+mailslurper.db
+# Don't commit local environments
+.env.local
+# Don't commit UFW backups
+ufw-backup-*.tar.gz

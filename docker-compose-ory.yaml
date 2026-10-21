@@ -1,0 +1,133 @@
+name: FIMOR-ORY
+services:
+
+  ory-config-bridge:
+    build: ./ory/envsubst
+    container_name: ory-config-bridge
+    env_file: 
+      - path: .env
+        required: true
+    entrypoint: ["sh"]
+    command: ["/opt/envsubst/bridge-configs.sh"]
+    volumes:
+      # Entrypoint
+      - ./ory/envsubst/bridge-configs.sh:/opt/envsubst/bridge-configs.sh
+      # POSTGRES
+      - ./pg/init:/opt/envsubst/pg
+      # KRATOS
+      - ./ory/kratos:/opt/envsubst/kratos
+      # HYDRA
+      - ./ory/hydra:/opt/envsubst/hydra
+      
+  ory-kratos:
+    image: oryd/kratos:v${ORY_VERSION}
+    container_name: ory-kratos
+    depends_on:
+      ory-config-bridge:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    cpus: "2.0"
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ory-pg:5432/${POSTGRES_KRATOS_DB}?sslmode=disable&max_conns=20&max_idle_conns=4
+      - LOG_LEVEL=info
+    command: serve -c /etc/config/kratos/kratos.yml --watch-courier
+    volumes:
+      - ./ory/kratos:/etc/config/kratos
+    networks:
+      - ory_backend
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      ##########
+      # PUBLIC
+      # Path routed from SERVICE_DOMAIN
+      - "traefik.http.routers.kratos-public.rule=Host(`${SERVICE_DOMAIN}`) && PathPrefix(`${KRATOS_PUBLIC_PATH}`) && !PathPrefix(`${KRATOS_PUBLIC_PATH}s`)" # Naming conflict - need to be very sensitive with (session vs sessions)
+      # Service LB for port forwarding
+      - "traefik.http.services.kratos-public-svclb.loadbalancer.server.port=4433"
+      - "traefik.http.routers.kratos-public.service=kratos-public-svclb"
+      # Public HTTPS Ingress
+      - "traefik.http.routers.kratos-public.entrypoints=web-secure"
+      - "traefik.http.routers.kratos-public.tls=true"
+      # Middlewares
+      - "traefik.http.routers.kratos-public.middlewares=prefix-strip"
+      # Automated ACME Cert
+      - "traefik.http.routers.kratos-public.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      ##########
+      # ADMIN
+      # Path routed from SERVICE_DOMAIN
+      - "traefik.http.routers.kratos-admin.rule=Host(`${SERVICE_DOMAIN}`) && PathPrefix(`${KRATOS_ADMIN_PATH}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.kratos-admin-svclb.loadbalancer.server.port=4434"
+      - "traefik.http.routers.kratos-admin.service=kratos-admin-svclb"
+      # Admin HTTPS ingress
+      - "traefik.http.routers.kratos-admin.entrypoints=private-secure"
+      - "traefik.http.routers.kratos-admin.tls=true"
+      # Middlewares
+      - "traefik.http.routers.kratos-admin.middlewares=prefix-strip"
+      # Automated ACME Cert
+      - "traefik.http.routers.kratos-admin.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+  ory-hydra:
+    image: oryd/hydra:v${ORY_VERSION}
+    container_name: ory-hydra    
+    depends_on:
+      ory-config-bridge:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    cpus: "2.0"
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ory-pg:5432/${POSTGRES_HYDRA_DB}?sslmode=disable&max_conns=20&max_idle_conns=4
+      - LOG_LEVEL=info
+    command: serve all -c /etc/config/hydra/hydra.yml
+    volumes:
+      - ./ory/hydra:/etc/config/hydra
+    networks:
+      - ory_backend
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      ##########
+      # PUBLIC
+      # Name-routed from subdomain
+      - "traefik.http.routers.hydra-public.rule=Host(`${SERVICE_DOMAIN}`) && PathPrefix(`${HYDRA_PUBLIC_PATH}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.hydra-public-svclb.loadbalancer.server.port=4444"
+      - "traefik.http.routers.hydra-public.service=hydra-public-svclb"
+      # Public HTTPS Ingress
+      - "traefik.http.routers.hydra-public.entrypoints=web-secure"
+      - "traefik.http.routers.hydra-public.tls=true"
+      # Middlewares
+      - "traefik.http.routers.hydra-public.middlewares=prefix-strip"
+      # Automated ACME Cert
+      - "traefik.http.routers.hydra-public.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      ##########
+      # ADMIN
+      # Name-routed from "auth" subdomain
+      - "traefik.http.routers.hydra-admin.rule=Host(`${SERVICE_DOMAIN}`) && PathPrefix(`${HYDRA_ADMIN_PATH}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.hydra-admin-svclb.loadbalancer.server.port=4445"
+      - "traefik.http.routers.hydra-admin.service=hydra-admin-svclb"
+      # Admin HTTPS ingress
+      - "traefik.http.routers.hydra-admin.entrypoints=private-secure"
+      - "traefik.http.routers.hydra-admin.tls=true"
+      # Middlewares
+      - "traefik.http.routers.hydra-admin.middlewares=prefix-strip"
+      # Automated ACME Cert
+      - "traefik.http.routers.hydra-admin.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+networks:
+  ory_backend:
+    external: true
+

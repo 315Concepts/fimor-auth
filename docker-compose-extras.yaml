@@ -1,0 +1,64 @@
+name: FIMOR-EXTRAS
+services:
+
+  kratos-selfservice-ui-node:
+    image: oryd/kratos-selfservice-ui-node:v${ORY_VERSION}
+    container_name: ory-selfservice
+    environment:
+      - KRATOS_PUBLIC_URL=https://${SERVICE_DOMAIN}${KRATOS_PUBLIC_PATH}
+      - KRATOS_BROWSER_URL=https://${SERVICE_DOMAIN}${KRATOS_PUBLIC_PATH}
+      - KRATOS_ADMIN_URL=https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${KRATOS_ADMIN_PATH}
+      - HYDRA_ADMIN_URL=https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${HYDRA_ADMIN_PATH}
+      - COOKIE_SECRET=${SELFSERVE_COOKIE_SECRET}
+      - CSRF_COOKIE_NAME=${SELFSERVE_CSRF_COOKIE_NAME}
+      - CSRF_COOKIE_SECRET=${SELFSERVE_CSRF_COOKIE_SECRET}
+    networks:
+      - ory_backend
+    restart: unless-stopped
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      ##########
+      # SELF SERVE UI
+      # Default ingress route - Self Service UI
+      - "traefik.http.routers.self-serve.rule=Host(`${SERVICE_DOMAIN}`)" # Default route / UI view on domain
+      # Service LB for port forwarding
+      - "traefik.http.services.self-serve-svclb.loadbalancer.server.port=3000"
+      - "traefik.http.routers.self-serve.service=self-serve-svclb"
+      # Public HTTPS Ingress
+      - "traefik.http.routers.self-serve.entrypoints=web-secure"
+      - "traefik.http.routers.self-serve.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.self-serve.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+  ory-admin:
+    image: dhiagharsallaoui/kratos-admin-ui:latest
+    container_name: ory-admin
+    restart: unless-stopped
+    environment:
+      - KRATOS_PUBLIC_URL=https://${SERVICE_DOMAIN}${KRATOS_PUBLIC_PATH}
+      - KRATOS_ADMIN_URL=https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${KRATOS_ADMIN_PATH}
+      - HYDRA_PUBLIC_URL=https://${SERVICE_DOMAIN}${HYDRA_PUBLIC_PATH}
+      - HYDRA_ADMIN_URL=https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${HYDRA_ADMIN_PATH}
+    networks:
+      - ory_backend 
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      ##########
+      # ADMIN UI
+      # Subdomain routed under SERVICE_DOMAIN
+      - "traefik.http.routers.ory-admin.rule=Host(`${ADMIN_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.ory-admin-svclb.loadbalancer.server.port=3000"
+      - "traefik.http.routers.ory-admin.service=ory-admin-svclb"
+      # Private HTTPS Ingress
+      - "traefik.http.routers.ory-admin.entrypoints=private-secure"
+      - "traefik.http.routers.ory-admin.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.ory-admin.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+networks:
+  ory_backend:
+    external: true
+

@@ -1,0 +1,109 @@
+name: FIMOR-DEBUG
+services:
+
+  whoami:
+    image: traefik/whoami
+    container_name: debug-whoami
+    labels:
+      # Traefik-aware
+      - "traefik.enable=true"
+      # Path-routed from "auth" subdomain
+      - "traefik.http.routers.whoami.rule= Host(`${SERVICE_DOMAIN}`) && PathPrefix(`${WHOAMI_PUBLIC_PATH}`)"
+      # Admin HTTPS Ingress
+      - "traefik.http.routers.whoami.entrypoints=private-secure"
+      - "traefik.http.routers.whoami.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.whoami.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      # Middleware list
+      - "traefik.http.routers.whoami.middlewares=prefix-strip"
+    networks:
+      - ory_backend
+      
+  consent:
+    image: oryd/hydra:v${ORY_VERSION}
+    container_name: debug-consent
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    command: [
+      perform, authorization-code, --port, "5555",
+      --client-id, "${CONSENT_CLIENT_ID}", --client-secret, "${CONSENT_CLIENT_SECRET}",
+      --endpoint, "https://${SERVICE_DOMAIN}${HYDRA_PUBLIC_PATH}", 
+      --scope, openid, --scope, offline, --scope, profile, --scope, email,
+      --redirect, "https://${CONSENT_SUBDOMAIN}.${SERVICE_DOMAIN}/callback"
+    ]
+    networks:
+      - ory_backend
+    labels:
+      - "traefik.enable=true"
+      # Consent App
+      # Name-routed from subdomain
+      - "traefik.http.routers.consent-ui.rule=Host(`${CONSENT_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.consent-ui-svclb.loadbalancer.server.port=5555"
+      - "traefik.http.routers.consent-ui.service=consent-ui-svclb"
+      # HTTP/HTTPS ingress
+      - "traefik.http.routers.consent-ui.entrypoints=web-secure"
+      - "traefik.http.routers.consent-ui.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.consent-ui.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+  mailslurper:
+    # Ory's MailSlurper implementation is broken, build from source
+    build: https://github.com/mailslurper/mailslurper.git
+    container_name: debug-mailslurper
+    restart: unless-stopped
+    entrypoint: ["sh"]
+    command: ["/app/entrypoint.sh"]
+    environment:
+      - SERVICE_DOMAIN=${SERVICE_DOMAIN}
+      - MAIL_SUBDOMAIN=${MAIL_SUBDOMAIN}
+      - SLURP_SUBDOMAIN=${SLURP_SUBDOMAIN}
+      - PRIVATE_HTTPS_PORT=${PRIVATE_HTTPS_PORT}
+    volumes:
+      - ./debug/mailslurper:/app
+    networks:
+      - ory_backend
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      ##########
+      # WEBMAIL UI
+      # Subdomain routed under SERVICE_DOMAIN
+      - "traefik.http.routers.mail.rule=Host(`${MAIL_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.mail-svclb.loadbalancer.server.port=4436"
+      - "traefik.http.routers.mail.service=mail-svclb"
+      # Private HTTPS Ingress
+      - "traefik.http.routers.mail.entrypoints=private-secure"
+      - "traefik.http.routers.mail.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.mail.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      ##########
+      # WEBMAIL API
+      # Subdomain routed under SERVICE_DOMAIN
+      - "traefik.http.routers.slurp.rule=Host(`${SLURP_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      # Service LB for port forwarding
+      - "traefik.http.services.slurp-svclb.loadbalancer.server.port=4437"
+      - "traefik.http.routers.slurp.service=slurp-svclb"
+      # Private HTTPS Ingress
+      - "traefik.http.routers.slurp.entrypoints=private-secure"
+      - "traefik.http.routers.slurp.tls=true"
+      # Automated ACME Cert
+      - "traefik.http.routers.slurp.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      ##########
+      # SMTP Service
+      # Subdomain routed under SERVICE_DOMAIN
+      - "traefik.tcp.routers.smtp.rule=HostSNI(`${SMTP_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      # Service LB for port forwarding
+      - "traefik.tcp.services.smtp-svclb.loadbalancer.server.port=1025"
+      - "traefik.tcp.routers.smtp.service=smtp-svclb"
+      # Custom SMTP ingress
+      - "traefik.tcp.routers.smtp.entrypoints=tcp-smtp"
+      - "traefik.tcp.routers.smtp.tls=true"
+      # Automated ACME Cert
+      - "traefik.tcp.routers.smtp.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+
+networks:
+  ory_backend:
+    external: true

@@ -1,0 +1,61 @@
+name: FIMOR-PG
+services:
+
+  ory-pg:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: ory-pg
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 6
+      start_period: 10s
+      timeout: 15s
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - ory_backend
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - ./pg/data:/var/lib/postgresql
+      - ./pg/init:/docker-entrypoint-initdb.d
+
+  kratos-migrate:
+    image: oryd/kratos:v${ORY_VERSION}
+    container_name: kratos-migrate
+    depends_on:
+      ory-pg:
+        condition: service_healthy
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ory-pg:5432/${POSTGRES_KRATOS_DB}?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ./ory/kratos:/etc/config/kratos
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+    restart: on-failure
+    networks:
+      - ory_backend
+    labels:
+      - "traefik.enable=false"
+      
+  hydra-migrate:
+    image: oryd/hydra:v${ORY_VERSION}
+    container_name: hydra-migrate
+    depends_on:
+      ory-pg:
+        condition: service_healthy
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ory-pg:5432/${POSTGRES_HYDRA_DB}?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ./ory/hydra:/etc/config/hydra
+    command: -c /etc/config/hydra/hydra.yml migrate sql -e --yes
+    restart: on-failure
+    networks:
+      - ory_backend
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  ory_backend:
+    external: true

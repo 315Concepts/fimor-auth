@@ -1,0 +1,203 @@
+#! /bin/bash
+
+#####
+# FiMOr control script
+#
+#   ./fimor init                      Generate .env.local from .env.base
+#   ./fimor up                        Bring up the whole stack
+#   ./fimor up <module> [args...]     Bring up one module (docker compose up)
+#   ./fimor down                      Tear down the whole stack
+#   ./fimor down <module> [args...]   Tear down one module (docker compose down)
+#   ./fimor clean                     Delete the ACME certificate cache (net/acme)
+#
+# Modules: pg, ory, extras, net, debug (see docker-compose-<module>.yaml)
+#####
+
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+
+NETWORK="ory_backend"
+
+usage() {
+    sed -n '4,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+#####
+# Environment
+#####
+
+# Refuse to run with unfilled placeholders (commented-out lines are ignored)
+check_placeholders() {
+    if [ -f ".env.local" ] && grep -v '^\s*#' ".env.local" | grep -qE 'CHANGEME|_STUB'; then
+        echo "Unset placeholders found in .env.local (CHANGEME / *_STUB):" >&2
+        grep -nE 'CHANGEME|_STUB' ".env.local" | grep -v '^[0-9]*:\s*#' >&2
+        echo "Run ./fimor init to generate secrets, and fill in the remaining values by hand." >&2
+        exit 1
+    fi
+}
+
+load_env() {
+    set -a
+    [ -f ".env.local" ] && source ".env.local"
+    source ".env"
+    set +a
+}
+
+#####
+# Modules
+#####
+
+compose() {
+    local module="$1"
+    shift
+    if [ ! -f "docker-compose-${module}.yaml" ]; then
+        echo "Unknown module '${module}' - no docker-compose-${module}.yaml" >&2
+        exit 1
+    fi
+    docker compose -f "docker-compose-${module}.yaml" "$@"
+}
+
+#####
+# Commands
+#####
+
+# Creates .env.local from .env.base and swaps every <VARNAME>_STUB placeholder
+# for a freshly generated random secret
+cmd_init() (
+    set -eu
+
+    local template=".env.base"
+    local target=".env.local"
+
+    if [ -e "${target}" ]; then
+        echo "${target} already exists - refusing to overwrite it."
+        echo "Remove it first if you want to regenerate every secret."
+        exit 1
+    fi
+
+    # Copy the template over
+    cp "${template}" "${target}"
+    chmod 600 "${target}"
+
+    # Inject a generated secret for every stub. 32 hex characters satisfies every
+    # consumer, including the Kratos cipher secret which must be exactly 32 long.
+    # Hex output is also safe to use inside sed.
+    local stub
+    for stub in $(grep -o '[A-Z0-9_]*_STUB' "${target}" | sort -u); do
+        sed -i "s/${stub}/$(openssl rand -hex 16)/g" "${target}"
+        echo "Generated ${stub%_STUB}"
+    done
+
+    echo
+    echo "Wrote ${target}."
+    if grep -q 'CHANGEME' "${target}"; then
+        echo "Still to set by hand:"
+        grep -n 'CHANGEME' "${target}" | grep -v '^[0-9]*:#'
+    fi
+)
+
+cmd_up() {
+    check_placeholders
+    load_env
+
+    if [ -n "${1:-}" ]; then
+        compose "$1" up "${@:2}"
+        return
+    fi
+
+    echo "Creating Docker network..."
+    docker network create "${NETWORK}" 1>/dev/null 2>&1 # No one cares if this exists already
+    compose net up -d
+    echo
+
+    echo "Creating Ory configs and database..."
+    compose ory up ory-config-bridge # Renders SQL templates for empty PG init
+    compose pg up ory-pg -d --wait
+    echo "   ---> Migrating PG for KRATOS..."
+    compose pg up kratos-migrate 1>/dev/null 2>&1 # Ignore the log spam from ORM migrations
+    echo "   ---> Migrating PG for HYDRA..."
+    compose pg up hydra-migrate 1>/dev/null 2>&1 # Ignore the log spam from ORM migrations
+    echo
+
+    echo "Starting ORY stack..."
+    compose ory up
+    echo
+
+    echo "Starting extras..."
+    compose extras up -d
+    echo
+
+    echo "Finished ORY auth stack bringup."
+    echo
+    echo "Available Endpoints:"
+    echo
+    echo "  Traefik Gateway ---> https://${TRAEFIK_SUBDOMAIN}.${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}/dashboard/"
+    echo
+    echo "  User Self-Service ---> https://${SERVICE_DOMAIN}"
+    echo
+    echo "  KRATOS Public ---> https://${SERVICE_DOMAIN}${KRATOS_PUBLIC_PATH}"
+    echo "  HYDRA Public ---> https://${SERVICE_DOMAIN}${HYDRA_PUBLIC_PATH}"
+    echo
+    echo "  KRATOS Admin ---> https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${KRATOS_ADMIN_PATH}"
+    echo "  HYDRA Admin ---> https://${SERVICE_DOMAIN}:${PRIVATE_HTTPS_PORT}${HYDRA_ADMIN_PATH}"
+    echo
+}
+
+cmd_down() {
+    load_env
+
+    if [ -n "${1:-}" ]; then
+        compose "$1" down "${@:2}"
+        return
+    fi
+
+    echo "Destroying Docker stacks..."
+    compose debug down
+    compose extras down
+    compose ory down
+    compose pg down
+    compose net down
+    echo "Done."
+
+    echo "Removing Docker network..."
+    docker network remove "${NETWORK}" 2>&1 1>/dev/null
+    echo "Done."
+}
+
+# Deletes the ACME certificate cache, both the staging and production state files.
+# Traefik rewrites these while running, so it must be stopped first.
+cmd_clean() {
+    local acme_dir="net/acme"
+
+    if [ "$(docker ps -q -f name='^ory-traefik$')" ]; then
+        echo "Traefik is running - run ./fimor down first." >&2
+        exit 1
+    fi
+
+    if [ ! -e "${acme_dir}" ]; then
+        echo "Nothing to clean - ${acme_dir} does not exist."
+        return
+    fi
+
+    echo "Removing ${acme_dir}..."
+    # Traefik runs as root, so the cache is usually root-owned
+    rm -rf "${acme_dir}" 2>/dev/null || sudo rm -rf "${acme_dir}"
+    echo "Done."
+}
+
+#####
+# Dispatch
+#####
+
+case "${1:-}" in
+    init) cmd_init ;;
+    up) cmd_up "${@:2}" ;;
+    down) cmd_down "${@:2}" ;;
+    clean) cmd_clean ;;
+    -h|--help|help|"") usage ;;
+    *)
+        echo "Unknown command '$1'" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+esac

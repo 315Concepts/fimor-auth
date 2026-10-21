@@ -1,0 +1,70 @@
+name: FIMOR-NET
+services:
+
+  traefik:
+    image: traefik:v${TRAEFIK_VERSION}
+    container_name: ory-traefik
+    restart: unless-stopped
+    cpus: "2.0"
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    command:
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog.format=json"
+      # Dashboard settings
+      - "--api.dashboard=true"
+      # Enable Docker provider - but only route to explicitly labeled containers
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Entrypoints
+      - "--entrypoints.web-insecure.address=:80"
+      - "--entrypoints.web-secure.address=:443"
+      - "--entrypoints.private-secure.address=:${PRIVATE_HTTPS_PORT}"
+      - "--entrypoints.tcp-smtp.address=:1025" # Remove for production mode
+      # Permanent HTTP -> HTTPS redirection for public routes
+      - "--entrypoints.web-insecure.http.redirections.entrypoint.to=web-secure"
+      - "--entrypoints.web-insecure.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web-insecure.http.redirections.entrypoint.permanent=true"
+      # ACME STG configuration
+      - "--certificatesresolvers.stg.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.stg.acme.email=${ACME_CERTIFICATE_EMAIL}"
+      - "--certificatesresolvers.stg.acme.storage=/acme/stg.json"
+      - "--certificatesresolvers.stg.acme.tlschallenge=true"
+      # ACME PRD configuration
+      - "--certificatesresolvers.prd.acme.caserver=https://acme-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.prd.acme.email=${ACME_CERTIFICATE_EMAIL}"
+      - "--certificatesresolvers.prd.acme.storage=/acme/prd.json"
+      - "--certificatesresolvers.prd.acme.tlschallenge=true"
+    labels:
+      # Routing enabled via Traefik
+      - "traefik.enable=true"
+      # Traefik dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_SUBDOMAIN}.${SERVICE_DOMAIN}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=private-secure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=${ACME_DEFAULT_RESOLVER}"
+      #####
+      # DYNAMIC CONFIGURATION LABELS - remove when using file-based dynamic configuration
+      #####
+      # Prefix-stripping Middleware
+      - "traefik.http.middlewares.prefix-strip.stripprefix.prefixes=${KRATOS_PUBLIC_PATH},${KRATOS_ADMIN_PATH},${HYDRA_PUBLIC_PATH},${HYDRA_ADMIN_PATH}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${PRIVATE_HTTPS_PORT}:${PRIVATE_HTTPS_PORT}"
+      - "1025:1025" # Remove for production mode
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./net/acme:/acme
+    networks:
+      - ory_backend
+
+networks:
+  ory_backend:
+    external: true
